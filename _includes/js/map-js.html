@@ -5,6 +5,7 @@
 {% endif %}
 {%- assign items = items | where_exp: 'item','item.latitude != nil and item.longitude != nil' -%}
 {%- assign fields = site.data.config-map -%}
+{%- assign geo_items = site.data[site.metadata] | where_exp: 'item','item.georeferenced != nil and item.objectid != nil' -%}
 <!-- load leaflet dependencies -->
 <script src="{{ '/assets/lib/leaflet/leaflet.js' | relative_url }}"></script>
 <script src="{{ '/assets/lib/leaflet/Leaflet.fullscreen.min.js' | relative_url }}"></script>
@@ -13,51 +14,81 @@
 {% if site.data.theme.map-cluster == true %}<script src="{{ '/assets/lib/leaflet/leaflet.markercluster.js' | relative_url }}"></script>{% endif %}
 {% if site.data.theme.map-search == true and site.data.theme.map-cluster == true %}<script src="{{ '/assets/lib/leaflet/leaflet.markercluster.freezable.js' | relative_url }}"></script>{% endif %}
 
+
 <script>
-(function(){
-    /* add collection map data */
-    var geodata = { "type": "FeatureCollection", "features": [ 
+    console.log("Total items in metadata:", {{ site.data[site.metadata] | size }});
+    console.log("Items after objectid filter:", {{ items | size }});
+
+    // {% for item in site.data[site.metadata] %}
+    //     {% if item.objectid == nil or item.objectid == "" or item.objectid == empty %}
+    //         console.log("Excluding item without objectid:", {{ item | jsonify }});
+    //     {% endif %}
+    //     {% if item.latitude == nil or item.longitude == nil %}
+    //         console.log("Excluding item without geolocation:", {{ item | jsonify }});
+    //     {% endif %}
+    // {% endfor %}
+    /* load items as map as georeferenced documents
+
+        Structure:
+        items = {
+                id: int,
+                title: string
+                thumbnail: path,
+                date: int{4},
+                source: string,
+                bounds: [[float, float], [float, float]],
+                item_page_url: path,
+                opacity: float,
+            }
+    */
+
+   /* Initialize documents array and populate */
+    let documents = []
+    console.log("Loading documents for map...")
     {% for item in items %}
-    { "type":"Feature", "geometry":{ "type":"Point", "coordinates":[{{ item.longitude | strip }},{{ item.latitude | strip }}] }, "properties":
-    { 
-        {% for f in fields %}{% if item[f.field] %}{{ f.field | escape | jsonify }}:{{ item[f.field] | strip | escape | jsonify }}, {%- endif -%}{%- endfor -%}
-        {% if item.image_thumb %}"img": {{ item.image_thumb | relative_url | jsonify }},{% endif %}
-        {% if item.display_template %}"template": {{ item.display_template | escape | jsonify }}, {%- endif -%}
-        {% if item.format %}"format": {{ item.format | escape | jsonify }}, {%- endif -%}
-        {% if item.image_alt_text %}"alt": {{ item.image_alt_text | escape | jsonify }}, {%- endif -%}
-        {% if item.parentid %}"parent": {{ item.parentid | jsonify }}, {%- endif -%}
-        "title": {{ item.title | escape | jsonify }},
-        "id": {{ item.objectid | jsonify }} 
-    } }{% unless forloop.last %}, {% endunless %}{% endfor %}
-    ]};
+        // console.log("Raw item data:", "{{item | jsonify}}");
+        documents.push({   
+            id: "{{item.objectid}}",
+            title: "{{item.title}}",
+            thumbnail: {{item.image_thumb | relative_url | jsonify}},
+            subject: {{item.subject | jsonify}},
+            creator: {{item.creator | jsonify}},
+            date: {{item.date}},
+            source: "{{item.source}}",
+            bounds: [{{item.bounds_nw | split:',' | jsonify}}, {{item.bounds_se | split: ',' |jsonify}}],
+            item_page_url: "{{ '/items/' | relative_url }}{% if item.parentid %}{{ item.parentid }}.html#{{ item.objectid }}{% else %}{{ item.objectid }}.html{% endif %}",
+            opacity: 0.7
+        });
+    {% endfor %}
 
-    /* check for url parameters and setup initial view options */ 
-    let url = new URL(window.location);
-    const locationSearchParams = url.searchParams.get('location');
-    var mapCenter = locationSearchParams ? locationSearchParams.split(',') : [{{ site.data.theme.latitude | default: 46.727485 }}, {{ site.data.theme.longitude | default: -117.014185 }}];
-    var mapZoom = locationSearchParams ? 16 : {{ site.data.theme.zoom-level | default: 5 }};
-    var markerFilter = url.searchParams.get('marker') ? url.searchParams.get('marker') : "";
+    // console.log(documents)
 
-    /* init map */
-    var map = L.map('map');
+    /* List of Active Overlay Layers */
+    let activeOverlays = {}
+
+    /* Create layer group for document overlays */
+    let documentLayerGroup = L.layerGroup();
+    
+    /* Default map center on North Carolina */
+    const map = L.map('map').setView([35.7596, -79.0193], 7)
 
     /* add map layer options */
-    var Esri_WorldStreetMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    const Esri_WorldStreetMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012'
     });
-    var Esri_NatGeoWorldMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', {
+    const Esri_NatGeoWorldMap = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; National Geographic, Esri, DeLorme, NAVTEQ, UNEP-WCMC, USGS, NASA, ESA, METI, NRCAN, GEBCO, NOAA, iPC',
         maxZoom: 16
     });
-    var Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    const Esri_WorldImagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
         attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
     });
-    var OpenStreetMap_Mapnik = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    const OpenStreetMap_Mapnik = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     });
     /* add base map switcher */
-    var baseMaps = {
+    const baseMaps = {
         "Esri World StreetMap": Esri_WorldStreetMap,
         "Esri National Geo": Esri_NatGeoWorldMap,
         "Esri Imagery": Esri_WorldImagery,
@@ -67,139 +98,230 @@
     /* load base map */
     {{ site.data.theme.map-base | default: 'Esri_WorldStreetMap' }}.addTo(map);
 
-    {% if site.data.theme.map-search == true %}
-    /* add search, https://github.com/naomap/leaflet-fusesearch */
-    var options = {
-        title: 'Search Map Items',
-        placeholder: 'Search map items...',
-        threshold: {{ site.data.theme.map-search-fuzziness | default: 0.35 }},
-        showResultFct: function(feature, container) {
-            var result = `<strong>${feature.properties.title}</strong><br>`;
-            {% for f in fields %}
-            if(feature.properties[{{ f.field | jsonify }}]) { result += feature.properties[{{ f.field | jsonify }}] + `<br>`; }
-            {% endfor %}
-            container.innerHTML = result;
-        }
-    };
-    var searchCtrl = L.control.fuseSearch(options);
-    searchCtrl.addTo(map);
-    searchCtrl.indexFeatures(geodata.features, {{ fields | where: 'search','true' | map: 'field' | unshift: 'title' | jsonify }});{% endif %}
+    /* add document layer gorup to map */
+    documentLayerGroup.addTo(map);
 
     /* add fullscreen control */ 
     map.addControl(new L.Control.Fullscreen());
 
-    {% if site.data.theme.map-cluster == true %}
-    /* create cluster group */
-    var markers = L.markerClusterGroup({ 
-        maxClusterRadius: {{ site.data.theme.map-cluster-radius | default: 15 }}, 
-        singleMarkerMode: true,
-        iconCreateFunction: function(cluster) {
-            /* custom icon function, tweak default to add more alt text */
-            var childCount = cluster.getChildCount();
-            var csize;
-            if (childCount < 10) {
-                csize = 'small';
-            } else if (childCount < 100) {
-                csize = 'medium';
+    /* Add document cards to div */
+    function createDocumentCards() {
+        const documentList = document.getElementById('document-list');
+        
+        documents.forEach(doc => {
+            const card = document.createElement('div');
+            card.className = 'document-card';
+            card.dataset.docId = doc.id;
+            
+            const thumbnail = document.createElement('img');
+            thumbnail.className = 'document-thumbnail';
+            thumbnail.src = doc.thumbnail;
+            thumbnail.alt = doc.title;
+            
+            const info = document.createElement('div');
+            info.className = 'document-info';
+            
+            const title = document.createElement('div');
+            title.className = 'document-title';
+            title.textContent = doc.title;
+            
+            const metadata = document.createElement('div');
+            metadata.className = 'document-metadata';
+            metadata.textContent = `${doc.date} - ${doc.source}`;
+            
+            info.appendChild(title);
+            info.appendChild(metadata);
+            
+            card.appendChild(thumbnail);
+            card.appendChild(info);
+            
+            // Add click event to toggle the document on the map
+            card.addEventListener('click', () => toggleDocumentOnMap(doc));
+            
+            documentList.appendChild(card);
+        });
+    }
+    
+    /* Function to remove document overlay from map */
+    function unsetDocOverlay(docId) {
+            documentLayerGroup.removeLayer(activeOverlays[docId]);
+            delete activeOverlays[docId];
+            const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
+            if (card) {
+                card.classList.remove('active');
+            }
+            updateActiveLayersList();
+        }
+    
+    /* Function to toggle documents on map */
+    function toggleDocumentOnMap(doc) {
+            const card = document.querySelector(`.document-card[data-doc-id="${doc.id}"]`);
+
+            if (activeOverlays[doc.id]) {
+                // center maps on document and open popup if already active
+                const bounds = L.latLngBounds(doc.bounds);
+                map.fitBounds(bounds);
             } else {
-                csize = 'large';
+                // Add the overlay if it's not active
+                const bounds = L.latLngBounds(doc.bounds);
+                
+                // Create an image overlay using the document's bounds
+                const overlay = new L.ImageOverlay(
+                    doc.thumbnail,
+                    bounds,
+                    {
+                        opacity: doc.opacity,
+                        interactive: true,
+                        alt: doc.title
+                    }
+                );
+                
+                // Add the overlay to the map
+                // overlay.addTo(map);
+
+                // Add overlay to document layer group
+                documentLayerGroup.addLayer(overlay);
+
+                // Store the overlay for later management
+                activeOverlays[doc.id] = overlay;
+
+                console.log("Active overlays:", Object.keys(activeOverlays));
+
+                // Highlight the card
+                card.classList.add('active');
+                
+                // Fit the map to the document bounds
+                map.fitBounds(bounds);
+
+                // remove overlay layer and add it again
+                map.removeLayer(documentLayerGroup);
+                documentLayerGroup.addTo(map);
+                
+                // Update the active layers list
+                updateActiveLayersList();
+                
+                // Add a popup when clicking on the overlay
+                overlay.on('click', (e) => {
+                    L.popup()
+                        .setLatLng(bounds.getCenter())
+                        .setContent(`<strong>${doc.title}</strong>
+                                    <br>
+                                    <strong>Date:</strong> ${doc.date}<br>
+                                    <strong>Creator:</strong> ${doc.creator}<br>
+                                    <strong>Subject:</strong> ${doc.subject}<br>
+                                    <br>${doc.date} - ${doc.source}<br>
+                                    <a href="${window.location.origin}/items/${doc.id}.html" target="_blank">View Item</a>`)
+                        .openOn(map);
+                });
             }
-            var c = ' marker-cluster-' + csize;
-            return new L.DivIcon({ html: '<div><span class="visually-hidden">' + csize +' cluster of </span><span>' + childCount + '</span><span class="visually-hidden"> items</span></div>', className: 'marker-cluster' + c, iconSize: new L.Point(40, 40) });
         }
-        {% if site.data.theme.map-search == true %}, removeOutsideVisibleBounds: false{% endif %} 
-    });{% endif %}
-
-    /* get icons function */ 
-    {% include helpers/get-icon.js %}
-
-    /* object popup function */
-    function objectPopups(feature, layer) {
-        {% if site.data.theme.map-search == true %}/* bind feature for search */
-        feature.layer = layer;{% endif %}
-        // find item link
-        var itemHref = `{{ '/items/' | relative_url }}${ feature.properties.parent ? feature.properties.parent + ".html#" + feature.properties.id : feature.properties.id + ".html"}`;
-        // find image
-        var imgAlt = feature.properties.alt ? feature.properties.alt : feature.properties.title;
-        var thumbImg;
-        if (feature.properties.img) {
-            thumbImg = '<img class="map-thumb" src="' + feature.properties.img + '" alt="' + imgAlt + '">';
-        } else {
-            thumbImg = getIcon(feature.properties.template,feature.properties.format,"thumb")
-        }
-        // set up popup content
-        var popupTemplate = '<h2 class="h4"><a class="text-dark" href="' + itemHref + '">' +
-            feature.properties.title + '</a></h2><div class="text-center"><a href="' + itemHref + 
-            '" >' + thumbImg + '</a></div><p>';
-        {% for f in fields %}{% if f.display_name %}
-        if (feature.properties[{{ f.field | escape | jsonify }}]) {
-            popupTemplate += '<strong>{{ f.display_name }}:</strong> ' + feature.properties[{{ f.field | escape | jsonify }}] + '<br>'; 
-        }
-        {% endif %}{% endfor %}
-        popupTemplate += '</p><div class="text-center"><a class="btn btn-light" href="' + itemHref + '" >View Item</a></div>';
-        layer.bindPopup(popupTemplate);
-    }
-    function objectMarkers(feature,latlng) {
-        var marker = L.marker(latlng, {alt: feature.properties.title});
-        {% if site.data.theme.map-cluster == true %}markers.addLayer(marker);{% endif %}
-        return marker;
-    }
-
-    /* add objects from geoJson features */
-    var mapFeatures = L.geoJson(geodata, {
-        onEachFeature: objectPopups,
-        pointToLayer: objectMarkers
-    }){% if site.data.theme.map-cluster != true %}.addTo(map);{% else %};
-    map.addLayer(markers);{% endif %}
-
-    {% if site.data.theme.auto-center-map == true %}
-    /* if no location was specified in the URL query parameters, auto center the map */
-    if (locationSearchParams === null) {
-        const featureBounds = mapFeatures.getBounds()
-        if (featureBounds?.isValid()) {
-            map.fitBounds(featureBounds);
-        }
-    } else {
-        /* set map view based on URL parameters */
-        map.setView(mapCenter, mapZoom);
-    }
-    {% else %}
-    /* set map view based on configuration or URL parameters */
-    map.setView(mapCenter, mapZoom);
-    {% endif %}
     
-    {% if site.data.theme.map-cluster == true and site.data.theme.map-search == true %}
-    /* uncluster when search is clicked */
-    document.querySelector('a.button').addEventListener("click", function() {
-        markers.disableClustering();
-    });
-    /* recluster when search is closed */
-    document.querySelector('a.close').addEventListener("click", function() {
-        markers.enableClustering();
-        document.querySelector('input.search-input').value = "";
-    });{% endif %}
+    /* Function to update Active Layers List */
+    function updateActiveLayersList() {
+            const activeLayersContainer = document.getElementById('active-layers');
+            activeLayersContainer.innerHTML = '';
+            
+            const activeDocIds = Object.keys(activeOverlays);
+            
+            if (activeDocIds.length === 0) {
+                activeLayersContainer.textContent = 'No active layers';
+                return;
+            }
+            
+            activeDocIds.forEach(docId => {
+                const doc = documents.find(d => d.id === docId);
+                if (doc) {
+                    const layerItem = document.createElement('div');
+                    layerItem.className = 'active-doc-div';
+                    
+                    // Create layer name with remove button
+                    layerItem.innerHTML = `
+                        <div style="position: relative; width: 120px; height: 60px; border-radius: 5px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                            <img src="${doc.thumbnail}" alt="${doc.title}" 
+                                 style="width: 100%; height: 100%; object-fit: cover; display: block;">
+                            
+                            <!-- Remove button (X) in top-right corner -->
+                            <button style="
+                                position: absolute;
+                                top: 2px;
+                                right: 2px;
+                                width: 16px;
+                                height: 16px;
+                                border: none;
+                                background: rgba(244, 67, 54, 0.9);
+                                color: white;
+                                border-radius: 50%;
+                                cursor: pointer;
+                                font-size: 10px;
+                                line-height: 1;
+                                padding: 0;
+                                display: flex;
+                                align-items: center;
+                                justify-content: center;
+                                font-weight: bold;
+                            " title="Remove layer">×</button>
+                            
+                            <!-- Title overlay at bottom -->
+                            <div style="
+                                position: absolute;
+                                bottom: 0;
+                                left: 0;
+                                right: 0;
+                                background: linear-gradient(transparent, rgba(0,0,0,0.7));
+                                color: white;
+                                padding: 8px 4px 4px;
+                                font-size: 10px;
+                                font-weight: bold;
+                                text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
+                                white-space: nowrap;
+                                overflow: hidden;
+                                text-overflow: ellipsis;
+                            ">${doc.title}</div>
+                        </div>
+                        
+                        <!-- Opacity slider below thumbnail -->
+                        <div style="width: 120px; margin-top: 3px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #666; margin-bottom: 2px;">
+                                <span>Opacity</span>
+                                <span id="opacity-value-${docId}">${Math.round(doc.opacity * 100)}%</span>
+                            </div>
+                            <input type="range" id="opacity-${docId}" min="0" max="1" step="0.1" value="${doc.opacity}" 
+                                   style="width: 100%; height: 4px;">
+                        </div>
+                    `;
+                    
+                    // Add event listener to remove button
+                    const removeButton = layerItem.querySelector('button');
+                    removeButton.addEventListener('click', () => {
+                        // Remove the overlay
+                        documentLayerGroup.removeLayer(activeOverlays[docId]);
+                        delete activeOverlays[docId];
+                        
+                        // Remove active class from card
+                        const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
+                        card.classList.remove('active');
+                        
+                        // Update the active layers list
+                        updateActiveLayersList();
+                    });
+                    
+                    // Add event listener to opacity slider
+                    const opacitySlider = layerItem.querySelector(`#opacity-${docId}`);
+                    const opacityValue = layerItem.querySelector(`#opacity-value-${docId}`);
+                    opacitySlider.addEventListener('input', (e) => {
+                        const opacity = parseFloat(e.target.value);
+                        activeOverlays[docId].setOpacity(opacity);
+                        opacityValue.textContent = `${Math.round(opacity * 100)}%`;
+                    });
+                    activeLayersContainer.appendChild(layerItem);
+                }
+            });
+        }
+      
+    /* Initialize the document cards */
+    createDocumentCards();
     
-    /* show popup if id in URL query */ 
-    if (markerFilter != "") {
-        {% if site.data.theme.map-cluster == true %}
-        markers.eachLayer(layer => {
-            if (layer.feature.properties.id === markerFilter) {
-                /* uncluster clusters, then show */ 
-                if (markers.getVisibleParent(layer)["_childCount"]) {
-                    markers.getVisibleParent(layer).spiderfy();
-                } 
-                layer.openPopup();
-            }
-        });
-        {% else %}
-        mapFeatures.eachLayer(layer => {
-            if (layer.feature.properties.id === markerFilter) {
-                layer.openPopup();
-            }
-        });
-        {% endif %}
-    }
-
-})();
+    /* Update active layers list */
+    updateActiveLayersList();
 
 </script>
