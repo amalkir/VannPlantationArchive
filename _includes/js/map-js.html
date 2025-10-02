@@ -106,42 +106,76 @@
 
     /* add document panel toggle */
     function createDocumentToggle() {
+        const toggleButton = document.getElementById('toggle-documents-panel');
         // Create toggle button
-        const toggleButton = document.createElement('button');
-        toggleButton.id = 'document-panel-toggle';
-        toggleButton.innerHTML = '▲';
-        toggleButton.title = 'Toggle document panel';;
+        // const toggleButton = document.createElement('button');
+        // toggleButton.id = 'document-panel-toggle';
+        // toggleButton.innerHTML = '▲';
+        // toggleButton.title = 'Toggle document panel';
+
+        // // position toggle button below the document panel
+        // docPanelHeight = document.getElementById('documents-panel').offsetHeight;
+        // docPanelTop = document.getElementById('documents-panel').offsetTop;
+        // toggleButton.style.top = `${docPanelTop + docPanelHeight - 3}px`; // 30px to overlap panel edge
 
         // Add toggle functionality
         let panelVisible = true;
         toggleButton.addEventListener('click', () => {
             const documentPanel = document.getElementById('documents-panel');
-            const mapContainer = document.getElementById('map-container');
-            const mapElement = document.getElementById('map');
-            
+            const documentList = document.getElementById('document-list');
+            const hideArrow = document.getElementById('hide-toggle-arrow');
+            const showArrow = document.getElementById('show-toggle-arrow');
             if (panelVisible) {
                 // Hide panel
-                documentPanel.style.transform = 'translateY(-100%)';
-                documentPanel.style.height = '0';
-                documentPanel.style.opacity= '0';
-                toggleButton.style.transform = 'translateY(-84vh)';
-                toggleButton.innerHTML = '▼';
-                toggleButton.title = 'Show document panel';
+                // documentPanel.classList.remove('documents-panel-visible');
+                // documentPanel.classList.add('documents-panel-hidden');
+                // toggleButton.style.transform = 'translateY(-75vh)';
+                // toggleButton.innerHTML = '▼';
+                // toggleButton.title = 'Show document panel';
+                documentList.classList.add('documents-cards-hidden');
+                documentList.classList.remove('documents-cards-visible');
+                hideArrow.style.display = 'none';
+                showArrow.style.display = 'block';
             } else {
+                documentList.classList.remove('documents-cards-hidden');
+                documentList.classList.add('documents-cards-visible');
+                hideArrow.style.display = 'block';
+                showArrow.style.display = 'none';
                 // Show panel
-                documentPanel.style.height = '85vh';
-                documentPanel.style.transform = 'translateY(0)';
-                documentPanel.style.opacity = '1';
-                toggleButton.style.transform = 'translateY(0)';
-                toggleButton.innerHTML = '▲'; 
-                toggleButton.title = 'Hide document panel';
+                // documentPanel.classList.remove('documents-panel-hidden');
+                // documentPanel.classList.add('documents-panel-visible');
+                // toggleButton.style.transform = 'translateY(0)';
+                // toggleButton.innerHTML = '▲'; 
+                // toggleButton.title = 'Hide document panel';
             }
             panelVisible = !panelVisible;
         });
 
         // Add to page
-        document.body.appendChild(toggleButton);
+        // document.body.appendChild(toggleButton);
     }
+
+    /* Position document panel below nav bar */
+    function positionDocumentPanel() {
+        const documentPanel = document.getElementById('documents-panel');
+        const navBar = document.querySelector('nav, .navbar, header nav, .site-nav, .main-nav');
+        
+        console.log('Document panel element:', documentPanel);
+        console.log('Nav bar element:', navBar);
+        
+        if (documentPanel) {
+            if (navBar) {
+                const navHeight = navBar.offsetHeight;
+                const navTop = navBar.offsetTop;
+                documentPanel.style.top = `${navHeight+navTop+10}px`;
+            } else {
+                documentPanel.style.top = '60px';
+            }
+        } else {
+            console.log('Document panel not found');
+        }
+    }
+
     /* Add document cards to div */
     function createDocumentCards() {
         const documentList = document.getElementById('document-list');
@@ -389,115 +423,14 @@
             }
         }
     
-    /* Function to update Active Layers List */
-    // function updateActiveLayersList() {
-    //         const activeLayersContainer = document.getElementById('active-layers');
-    //         activeLayersContainer.innerHTML = '';
-            
-    //         const activeDocIds = Object.keys(activeOverlays);
-            
-    //         if (activeDocIds.length === 0) {
-    //             activeLayersContainer.textContent = 'No active layers';
-    //             return;
-    //         }
-            
-    //         activeDocIds.forEach(docId => {
-    //             const doc = documents.find(d => d.id === docId);
-    //             if (doc) {
-    //                 const layerItem = document.createElement('div');
-    //                 layerItem.className = 'active-doc-div';
-                    
-    //                 // Create layer name with remove button
-    //                 layerItem.innerHTML = `
-    //                     <div style="position: relative; width: 120px; height: 60px; border-radius: 5px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-    //                         <img src="${doc.thumbnail}" alt="${doc.title}" 
-    //                              style="width: 100%; height: 100%; object-fit: cover; display: block;">
-                            
-    //                         <!-- Remove button (X) in top-right corner -->
-    //                         <button style="
-    //                             position: absolute;
-    //                             top: 2px;
-    //                             right: 2px;
-    //                             width: 16px;
-    //                             height: 16px;
-    //                             border: none;
-    //                             background: rgba(244, 67, 54, 0.9);
-    //                             color: white;
-    //                             border-radius: 50%;
-    //                             cursor: pointer;
-    //                             font-size: 10px;
-    //                             line-height: 1;
-    //                             padding: 0;
-    //                             display: flex;
-    //                             align-items: center;
-    //                             justify-content: center;
-    //                             font-weight: bold;
-    //                         " title="Remove layer">×</button>
-                            
-    //                         <!-- Title overlay at bottom -->
-    //                         <div style="
-    //                             position: absolute;
-    //                             bottom: 0;
-    //                             left: 0;
-    //                             right: 0;
-    //                             background: linear-gradient(transparent, rgba(0,0,0,0.7));
-    //                             color: white;
-    //                             padding: 8px 4px 4px;
-    //                             font-size: 10px;
-    //                             font-weight: bold;
-    //                             text-shadow: 1px 1px 1px rgba(0,0,0,0.8);
-    //                             white-space: nowrap;
-    //                             overflow: hidden;
-    //                             text-overflow: ellipsis;
-    //                         ">${doc.title}</div>
-    //                     </div>
-                        
-    //                     <!-- Opacity slider below thumbnail -->
-    //                     <div style="width: 120px; margin-top: 3px;">
-    //                         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; color: #666; margin-bottom: 2px;">
-    //                             <span>Opacity</span>
-    //                             <span id="opacity-value-${docId}">${Math.round(doc.opacity * 100)}%</span>
-    //                         </div>
-    //                         <input type="range" id="opacity-${docId}" min="0" max="1" step="0.1" value="${doc.opacity}" 
-    //                                style="width: 100%; height: 4px;">
-    //                     </div>
-    //                 `;
-                    
-    //                 // Add event listener to remove button
-    //                 const removeButton = layerItem.querySelector('button');
-    //                 removeButton.addEventListener('click', () => {
-    //                     // Remove the overlay
-    //                     documentLayerGroup.removeLayer(activeOverlays[docId]);
-    //                     delete activeOverlays[docId];
-                        
-    //                     // Remove active class from card
-    //                     const card = document.querySelector(`.document-card[data-doc-id="${docId}"]`);
-    //                     card.classList.remove('active');
-                        
-    //                     // Update the active layers list
-    //                     updateActiveLayersList();
-    //                 });
-                    
-    //                 // Add event listener to opacity slider
-    //                 const opacitySlider = layerItem.querySelector(`#opacity-${docId}`);
-    //                 const opacityValue = layerItem.querySelector(`#opacity-value-${docId}`);
-    //                 opacitySlider.addEventListener('input', (e) => {
-    //                     const opacity = parseFloat(e.target.value);
-    //                     activeOverlays[docId].setOpacity(opacity);
-    //                     opacityValue.textContent = `${Math.round(opacity * 100)}%`;
-    //                 });
-    //                 activeLayersContainer.appendChild(layerItem);
-    //             }
-    //         });
-    //     }
-      
-    /* Initialize document panel toggle */
-    createDocumentToggle();
 
-    /* Initialize the document cards */
-    createDocumentCards();
-    
-    /* Update active layers list */
-    // updateActiveLayersList();
+    document.addEventListener('DOMContentLoaded', () => {
+        createDocumentCards();
+        createDocumentToggle();
+
+        setTimeout(() => {
+            positionDocumentPanel();
+        }, 100);
+    });
 
 </script>
