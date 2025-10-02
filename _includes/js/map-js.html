@@ -272,11 +272,12 @@
         // Create opacity control container
         const opacityContainer = document.createElement('div');
         opacityContainer.className = 'opacity-control';
-        opacityContainer.style.cssText = `
-            margin-top: 8px;
-            padding-top: 8px;
-            border-top: 1px solid #eee;
-        `;
+        opacityContainer.style.display = 'none';
+
+         opacityContainer.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+
         
         // Create opacity label and value display
         const opacityLabel = document.createElement('div');
@@ -328,6 +329,22 @@
         
         // Add to document info
         documentInfo.appendChild(opacityContainer);
+
+        // Add hover event listeners to the card for showing/hiding opacity control
+        card.addEventListener('mouseenter', () => {
+            if (card.classList.contains('active')) {
+                opacityContainer.style.display = 'block';
+            }
+        });
+        
+        card.addEventListener('mouseleave', () => {
+            opacityContainer.style.display = 'none';
+        });
+
+        // Show the opacity control immediately if the card is active and being hovered
+        if (card.classList.contains('active') && card.matches(':hover')) {
+            opacityContainer.style.display = 'block';
+        }
     }
 
     /* Function to remove document overlay from map */
