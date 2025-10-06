@@ -3,7 +3,7 @@
 {% else %}
 {%- assign items = site.data[site.metadata] | where_exp: 'item','item.objectid and item.parentid == nil' -%}
 {% endif %}
-{%- assign items = items | where_exp: 'item','item.latitude != nil and item.longitude != nil' -%}
+{%- assign items = items | where_exp: 'item','item.image_map != nil' -%}
 {%- assign fields = site.data.config-map -%}
 {%- assign geo_items = site.data[site.metadata] | where_exp: 'item','item.georeferenced != nil and item.objectid != nil' -%}
 <!-- load leaflet dependencies -->
@@ -53,7 +53,7 @@
             thumbnail: {{item.image_thumb | relative_url | jsonify}},
             subject: {{item.subject | jsonify}},
             creator: {{item.creator | jsonify}},
-            date: {{item.date}},
+            date: {{ item.date | default: "Unknown" | jsonify }},
             source: "{{item.source}}",
             bounds: [{{item.bounds_nw | split:',' | jsonify}}, {{item.bounds_se | split: ',' |jsonify}}],
             item_page_url: "{{ '/items/' | relative_url }}{% if item.parentid %}{{ item.parentid }}.html#{{ item.objectid }}{% else %}{{ item.objectid }}.html{% endif %}",
