@@ -55,7 +55,10 @@
             creator: {{item.creator | jsonify}},
             date: {{ item.date | default: "Unknown" | jsonify }},
             source: "{{item.source}}",
-            bounds: [{{item.bounds_nw | split:',' | jsonify}}, {{item.bounds_se | split: ',' |jsonify}}],
+            top_left_x: {{ item.top_left_x | jsonify }},
+            top_left_y: {{ item.top_left_y | jsonify }},
+            bottom_right_x: {{ item.bottom_right_x | jsonify }},
+            bottom_right_y: {{ item.bottom_right_y | jsonify }},
             item_page_url: "{{ '/items/' | relative_url }}{% if item.parentid %}{{ item.parentid }}.html#{{ item.objectid }}{% else %}{{ item.objectid }}.html{% endif %}",
             opacity: 0.7
         });
@@ -184,6 +187,7 @@
             const card = document.createElement('div');
             card.className = 'document-card';
             card.dataset.docId = doc.id;
+            card.style.position = 'relative'
             
             const thumbnail = document.createElement('img');
             thumbnail.className = 'document-thumbnail';
@@ -211,12 +215,19 @@
             card.addEventListener('click', () => toggleDocumentOnMap(doc));
             
             documentList.appendChild(card);
+
+            if (activeOverlays[doc.id]) {
+                card.classList.add('active');
+                addRemoveButton(card, doc);
+                addOpacitySelector(card, doc);
+            }
         });
     }
     
     /* Function to add remove button to document card */
     function addRemoveButton(card, doc) {
-    // Check if remove button already exists
+        console.log("Adding remove button for doc:", doc.id)
+        // Check if remove button already exists
         if (card.querySelector('.remove-button')) {
             return;
         }
@@ -374,11 +385,11 @@
             if (activeOverlays[doc.id]) {
                 // center maps on document and open popup if already active
 
-                const bounds = L.latLngBounds(doc.bounds);
+                const bounds = L.latLngBounds([[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]);
                 map.fitBounds(bounds);
             } else {
                 // Add the overlay if it's not active
-                const bounds = L.latLngBounds(doc.bounds);
+                const bounds = L.latLngBounds([[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]);
                 
                 // Create an image overlay using the document's bounds
                 const overlay = new L.ImageOverlay(
@@ -444,6 +455,12 @@
     document.addEventListener('DOMContentLoaded', () => {
         createDocumentCards();
         createDocumentToggle();
+
+        if (documents.length > 0) {
+            setTimeout(() => {
+                toggleDocumentOnMap(documents[0]);
+            }, 100);
+        }
 
         setTimeout(() => {
             positionDocumentPanel();
