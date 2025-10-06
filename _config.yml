@@ -24,6 +24,7 @@ tagline: An Archive of Place in North Carolina
 # description appears in meta tags and other locations
 # this description might appear in search result lists, keep around 160 characters max
 description: "This digital archive traces the history of Rivers Correctional Institution site in Hertford County, North Carolina—a private federal prison built in 2001 to incarcerate noncitizens and closed in 2022"
+description_long: "From Plantation to Prison is a digital archive and interpretive exhibit that explores the layered history of the site now occupied by the Rivers Correctional Institution (RCI) in Hertford County, North Carolina. Built in 2001 as a private federal prison for noncitizens and closed in 2022, RCI was constructed on the grounds of the former Vann Plantation. Today, a prison watchtower overlooks an antebellum cemetery, embedding the legacies of slavery and immigrant incarceration within a single landscape. This project invites visitors to engage with the dissonant temporalities of plantation and prison, offering a space for public history, pedagogy, and reflection."
 # keywords, a short list of subjects describing the collection, separated by semicolon, to appear in rich markup
 keywords: north carolina; archive; prison; history; geography; plantation
 # creator of the digital collection, to appear in meta tags; we typically use our GitHub usernames but feel free to just use your name
