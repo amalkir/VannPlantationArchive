@@ -50,7 +50,7 @@
         documents.push({   
             id: "{{item.objectid}}",
             title: "{{item.title}}",
-            thumbnail: {{item.image_thumb | relative_url | jsonify}},
+            thumbnail: {{item.image_map | relative_url | jsonify}},
             subject: {{item.subject | jsonify}},
             creator: {{item.creator | jsonify}},
             date: {{ item.date | default: "Unknown" | jsonify }},
@@ -458,7 +458,7 @@
 
         if (documents.length > 0) {
             setTimeout(() => {
-                toggleDocumentOnMap(documents[0]);
+                toggleDocumentOnMap(documents[8]);
             }, 100);
         }
 
