@@ -45,20 +45,33 @@
    /* Initialize documents array and populate */
     let documents = []
     console.log("Loading documents for map...")
+
+    // simple HTML escape helper to avoid injecting raw HTML into overlays
+    function escapeHtml(unsafe) {
+        if (unsafe === null || unsafe === undefined) return '';
+        return String(unsafe)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
     {% for item in items %}
         // console.log("Raw item data:", "{{item | jsonify}}");
         documents.push({   
             id: "{{item.objectid}}",
             title: "{{item.title}}",
-            thumbnail: {{item.image_map | relative_url | jsonify}},
+            thumbnail: {{item.image_thumb | relative_url | jsonify}},
+            overlay_img: {{item.image_map | relative_url | jsonify}},
+            top_left_x: Number({{ item.top_left_x | default: 0.0 | jsonify }}),
+            top_left_y: Number({{ item.top_left_y | default: 0.0 | jsonify }}),
+            bottom_right_x: Number({{ item.bottom_right_x | default: 0.0 | jsonify }}),
+            bottom_right_y: Number({{ item.bottom_right_y | default: 0.0 | jsonify }}),
             subject: {{item.subject | jsonify}},
             creator: {{item.creator | jsonify}},
-            date: {{ item.date | default: "Unknown" | jsonify }},
+            date: '{{item.date}}',
             source: "{{item.source}}",
-            top_left_x: {{ item.top_left_x | jsonify }},
-            top_left_y: {{ item.top_left_y | jsonify }},
-            bottom_right_x: {{ item.bottom_right_x | jsonify }},
-            bottom_right_y: {{ item.bottom_right_y | jsonify }},
+            bounds: [{{item.bounds_nw | split:',' | jsonify}}, {{item.bounds_se | split: ',' |jsonify}}],
             item_page_url: "{{ '/items/' | relative_url }}{% if item.parentid %}{{ item.parentid }}.html#{{ item.objectid }}{% else %}{{ item.objectid }}.html{% endif %}",
             opacity: 0.7
         });
@@ -110,16 +123,6 @@
     /* add document panel toggle */
     function createDocumentToggle() {
         const toggleButton = document.getElementById('toggle-documents-panel');
-        // Create toggle button
-        // const toggleButton = document.createElement('button');
-        // toggleButton.id = 'document-panel-toggle';
-        // toggleButton.innerHTML = '▲';
-        // toggleButton.title = 'Toggle document panel';
-
-        // // position toggle button below the document panel
-        // docPanelHeight = document.getElementById('documents-panel').offsetHeight;
-        // docPanelTop = document.getElementById('documents-panel').offsetTop;
-        // toggleButton.style.top = `${docPanelTop + docPanelHeight - 3}px`; // 30px to overlap panel edge
 
         // Add toggle functionality
         let panelVisible = true;
@@ -129,12 +132,6 @@
             const hideArrow = document.getElementById('hide-toggle-arrow');
             const showArrow = document.getElementById('show-toggle-arrow');
             if (panelVisible) {
-                // Hide panel
-                // documentPanel.classList.remove('documents-panel-visible');
-                // documentPanel.classList.add('documents-panel-hidden');
-                // toggleButton.style.transform = 'translateY(-75vh)';
-                // toggleButton.innerHTML = '▼';
-                // toggleButton.title = 'Show document panel';
                 documentList.classList.add('documents-cards-hidden');
                 documentList.classList.remove('documents-cards-visible');
                 hideArrow.style.display = 'none';
@@ -144,12 +141,6 @@
                 documentList.classList.add('documents-cards-visible');
                 hideArrow.style.display = 'block';
                 showArrow.style.display = 'none';
-                // Show panel
-                // documentPanel.classList.remove('documents-panel-hidden');
-                // documentPanel.classList.add('documents-panel-visible');
-                // toggleButton.style.transform = 'translateY(0)';
-                // toggleButton.innerHTML = '▲'; 
-                // toggleButton.title = 'Hide document panel';
             }
             panelVisible = !panelVisible;
         });
@@ -187,13 +178,20 @@
             const card = document.createElement('div');
             card.className = 'document-card';
             card.dataset.docId = doc.id;
-            card.style.position = 'relative'
             
+            const thumbWrap = document.createElement('div');
+            thumbWrap.className = 'thumb-wrap';
+
             const thumbnail = document.createElement('img');
             thumbnail.className = 'document-thumbnail';
             thumbnail.src = doc.thumbnail;
             thumbnail.alt = doc.title;
-            
+
+            // overlay element that will show title/metadata on hover or when active
+            const overlayElem = document.createElement('div');
+            overlayElem.className = 'document-overlay';
+            overlayElem.innerHTML = `<div class="document-overlay-title">${escapeHtml(doc.title)}</div><div class="document-overlay-meta">${escapeHtml(doc.creator || '')}<br>${escapeHtml(doc.date || '')}</div>`;
+
             const info = document.createElement('div');
             info.className = 'document-info';
             
@@ -207,27 +205,24 @@
             
             info.appendChild(title);
             info.appendChild(metadata);
-            
-            card.appendChild(thumbnail);
-            card.appendChild(info);
+
+            // assemble thumb wrap
+            thumbWrap.appendChild(thumbnail);
+            thumbWrap.appendChild(overlayElem);
+
+            // append thumb (with overlay) to card; DO NOT append the info below the image
+            card.appendChild(thumbWrap);
             
             // Add click event to toggle the document on the map
             card.addEventListener('click', () => toggleDocumentOnMap(doc));
             
             documentList.appendChild(card);
-
-            if (activeOverlays[doc.id]) {
-                card.classList.add('active');
-                addRemoveButton(card, doc);
-                addOpacitySelector(card, doc);
-            }
         });
     }
     
     /* Function to add remove button to document card */
     function addRemoveButton(card, doc) {
-        console.log("Adding remove button for doc:", doc.id)
-        // Check if remove button already exists
+    // Check if remove button already exists
         if (card.querySelector('.remove-button')) {
             return;
         }
@@ -278,12 +273,15 @@
 
     /* Function to add opacity selector to document card */
     function addOpacitySelector(card, doc) {
-        const documentInfo = card.querySelector('.document-info');
+        // prefer appending controls to the overlay so they appear over the image
+        const documentInfo = card.querySelector('.document-overlay') || card.querySelector('.document-info');
         
         // Create opacity control container
         const opacityContainer = document.createElement('div');
-        opacityContainer.className = 'opacity-control';
-        opacityContainer.style.display = 'none';
+    opacityContainer.className = 'opacity-control';
+    opacityContainer.style.display = 'none';
+    opacityContainer.style.color = '#fff';
+    opacityContainer.style.zIndex = 6;
 
          opacityContainer.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -296,9 +294,9 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 11px;
-            color: #666;
-            margin-bottom: 4px;
+            font-size: 12px;
+            color: rgba(255,255,255,0.95);
+            margin-bottom: 6px;
         `;
         opacityLabel.innerHTML = `
             <span>Opacity</span>
@@ -316,7 +314,7 @@
         opacitySlider.style.cssText = `
             width: 100%;
             height: 4px;
-            background: #ddd;
+            background: rgba(255,255,255,0.15);
             outline: none;
             border-radius: 2px;
         `;
@@ -341,21 +339,21 @@
         // Add to document info
         documentInfo.appendChild(opacityContainer);
 
-        // Add hover event listeners to the card for showing/hiding opacity control
-        card.addEventListener('mouseenter', () => {
-            if (card.classList.contains('active')) {
+        // Show/hide the opacity control when the overlay is visible.
+        // The overlay is visible on card:hover or when card has .active
+        function updateOpacityControlVisibility() {
+            if (card.classList.contains('active') || card.matches(':hover')) {
                 opacityContainer.style.display = 'block';
+            } else {
+                opacityContainer.style.display = 'none';
             }
-        });
-        
-        card.addEventListener('mouseleave', () => {
-            opacityContainer.style.display = 'none';
-        });
-
-        // Show the opacity control immediately if the card is active and being hovered
-        if (card.classList.contains('active') && card.matches(':hover')) {
-            opacityContainer.style.display = 'block';
         }
+
+        card.addEventListener('mouseenter', updateOpacityControlVisibility);
+        card.addEventListener('mouseleave', updateOpacityControlVisibility);
+
+        // initial visibility
+        updateOpacityControlVisibility();
     }
 
     /* Function to remove document overlay from map */
@@ -384,34 +382,32 @@
 
             if (activeOverlays[doc.id]) {
                 // center maps on document and open popup if already active
-
-                const bounds = L.latLngBounds([[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]);
+                const latLong = [[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]
+                const bounds = L.latLngBounds(latLong);
                 map.fitBounds(bounds);
             } else {
+                const latLong = [[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]
                 // Add the overlay if it's not active
-                const bounds = L.latLngBounds([[doc.top_left_x, doc.top_left_y], [doc.bottom_right_x, doc.bottom_right_y]]);
-                
+                const bounds = L.latLngBounds(latLong);
+                const uniqueClass = `doc-overlay-image-${doc.id}`
                 // Create an image overlay using the document's bounds
                 const overlay = new L.ImageOverlay(
-                    doc.thumbnail,
+                    doc.overlay_img,
                     bounds,
                     {
                         opacity: doc.opacity,
                         interactive: true,
-                        alt: doc.title
+                        alt: doc.title,
+                        className:uniqueClass,
+                        id: doc.title
                     }
                 );
-                
-                // Add the overlay to the map
-                // overlay.addTo(map);
 
                 // Add overlay to document layer group
                 documentLayerGroup.addLayer(overlay);
 
                 // Store the overlay for later management
                 activeOverlays[doc.id] = overlay;
-
-                console.log("Active overlays:", Object.keys(activeOverlays));
 
                 // Highlight the card
                 card.classList.add('active');
@@ -432,9 +428,6 @@
                 map.removeLayer(documentLayerGroup);
                 documentLayerGroup.addTo(map);
                 
-                // Update the active layers list
-                // updateActiveLayersList();
-                
                 // Add a popup when clicking on the overlay
                 overlay.on('click', (e) => {
                     L.popup()
@@ -445,18 +438,17 @@
                                     <strong>Creator:</strong> ${doc.creator}<br>
                                     <strong>Subject:</strong> ${doc.subject}<br>
                                     <br>${doc.date} - ${doc.source}<br>
-                                    <a href="${window.location.origin}/items/${doc.id}.html" target="_blank">View Item</a>`)
+                                    <a href="${doc.item_page_url}" target="_blank">View Item</a>`)
                         .openOn(map);
                 });
             }
         }
     
-
     document.addEventListener('DOMContentLoaded', () => {
         createDocumentCards();
         createDocumentToggle();
 
-        if (documents.length > 0) {
+         if (documents.length > 0) {
             setTimeout(() => {
                 toggleDocumentOnMap(documents[8]);
             }, 100);
