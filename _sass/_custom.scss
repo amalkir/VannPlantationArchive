@@ -143,8 +143,8 @@
     margin-bottom: 10px;
     cursor: pointer;
     transition: transform 0.2s;
-    display: flex;
-    height: 10vw;
+    display: block; /* stack thumbnail over info to allow full-width images */
+    overflow: hidden;
 }
 
 .document-card:hover {
@@ -163,20 +163,61 @@
 }
 
 .document-thumbnail {
-    width: 10vw;
-    height: 10vw;
-    border-top-left-radius: 5px;
-    object-fit: cover;
+    width: 100%;
+    height: auto; /* allow image to determine height while filling width */
     display: block;
+    object-fit: cover;
+}
+
+/* overlay that contains metadata and controls, positioned over the image */
+.document-overlay {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(rgba(0,0,0,0.0), rgba(0,0,0,0.6));
+    color: #fff;
+    padding: 10px;
+    box-sizing: border-box;
+    transition: transform 0.18s ease, opacity 0.18s ease;
+    transform: translateY(30%);
+    opacity: 0;
+    z-index: 4;
+}
+
+.document-overlay-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 4px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    overflow: hidden;
+}
+
+.document-overlay-meta {
+    font-size: 0.8rem;
+    opacity: 0.95;
+    line-height: 1.1;
+    max-height: 3.3em;
+    overflow: hidden;
+}
+
+/* container to make overlay positioning work */
+.document-card .thumb-wrap {
+    position: relative;
+}
+
+/* show overlay on hover and when card is active */
+.document-card:hover .document-overlay,
+.document-card.active .document-overlay {
+    transform: translateY(0);
+    opacity: 1;
 }
 
 .document-info {
-    padding-top: 3px;
-    padding-left: 6px;
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    /* keep for fallback (hidden by default); metadata and controls now appear in the overlay */
+    padding: 10px 8px;
+    display: none;
 }
 
 .document-title {
